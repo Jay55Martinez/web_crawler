@@ -6,12 +6,12 @@ import ssl
 import certifi
 import re
 
-DEFAULT_SERVER = "fakebook.khoury.northeastern.edu"
+DEFAULT_SERVER = "proj5.3700.network"
 DEFAULT_PORT = 443
 
 class Crawler:
-    def __init__(self, args):
-        self.debug = True
+    def __init__(self, args, debug=False):
+        self.debug = debug
         self.server = args.server
         self.port = args.port
         self.username = args.username
@@ -26,92 +26,79 @@ class Crawler:
 
     def connect(self):
         """Establishes a secure connection to the server."""
-        try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sslsocket = self.context.wrap_socket(self.socket, server_hostname=self.server)
-            self.sslsocket.connect((self.server, self.port))
-        except Exception as e:
-            print(f"Error connecting to server: {e}")
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sslsocket = self.context.wrap_socket(self.socket, server_hostname=self.server)
+        self.sslsocket.connect((self.server, self.port))
+        if self.debug:
+            print(f"Connected to {self.server}:{self.port}")
 
     def close(self):
         """Closes the connection."""
-        try:
-            if self.sslsocket:
-                self.sslsocket.close()
-        except Exception as e:
-            print(f"Error closing the connection: {e}")
+        if self.sslsocket:
+            self.sslsocket.close()
+            if self.debug:
+                print("Connection closed.")
 
     def rec_webpage(self, path="/"):
         """Sends a GET request and retrieves the server's response."""
-        try:
-            request = (f"GET {path} HTTP/1.1\r\nHost: {self.server}:{self.port}\r\nConnection: close\r\n")
-            if self.cookies:
-                request += f"Cookie: {self.pass_cookies_responce()}\r\n"
-            request += "\r\n"
-            self.sslsocket.send(request.encode('ascii'))
-
-            response = b""
-            while True:
-                chunk = self.sslsocket.recv(4096)
-                if not chunk:
-                    break
-                response += chunk
-
-            return response.decode('utf-8', errors='ignore')
-        except Exception as e:
-            print(f"Error receiving webpage: {e}")
-            return ""
+        request = (f"GET {path} HTTP/1.1\r\nHost: {self.server}:{self.port}\r\nConnection: close\r\n")
+        if self.cookies:
+            request += f"Cookie: {self.pass_cookies_responce()}\r\n"
+        request += "\r\n"
+        if self.debug:
+            print(f"Request to {self.server}:{self.port}:\n{request}")
+        self.sslsocket.send(request.encode('ascii'))
+    
+        response = b""
+        while True:
+            chunk = self.sslsocket.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+        if self.debug:
+            print(f"Response from {self.server}:{self.port}:\n{response.decode('utf-8', errors='ignore')}")
+        return response.decode('utf-8', errors='ignore')
 
     def extract_next_link(self, response, target_text):
         """Extracts the URL path of a link containing the target text."""
-        try:
-            pattern = re.compile(r'<a href="([^"]+)">.*?' + re.escape(target_text) + r'.*?</a>', re.IGNORECASE)
-            match = pattern.search(response)
-            if match:
-                return match.group(1)
-            return None
-        except Exception as e:
-            print(f"Error extracting next link: {e}")
-            return None
-
+        pattern = re.compile(r'<a href="([^"]+)">.*?' + re.escape(target_text) + r'.*?</a>', re.IGNORECASE)
+        match = pattern.search(response)
+        if match:
+            return match.group(1)
+        return None
+    
     def goto_next_location(self, response):
         """Extracts the 'Location' header value from an HTTP response."""
-        try:
-            pattern = re.compile(r'location:\s*([^\r\n]+)', re.IGNORECASE)
-            match = pattern.search(response)
-            if match:
-                return match.group(1).strip()  # Clean any whitespace
-            return None
-        except Exception as e:
-            print(f"Error extracting next location: {e}")
-            return None
-
+        pattern = re.compile(r'location:\s*([^\r\n]+)', re.IGNORECASE)
+        match = pattern.search(response)
+        if match:
+            return match.group(1).strip()  # Clean any whitespace
+        return None
+    
+    
     def post_login(self):
         """Posts the login form to the server."""
-        try:
-            request = (f"POST /accounts/login/ HTTP/1.1\r\nHost: {self.server}:{self.port}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 200\r\nCookie: {self.pass_cookies_responce()}\r\nConnection: close\r\n\r\nusername={self.username}&password={self.password}&csrfmiddlewaretoken={self.csrf_token}&next=%2Ffakebook%2F\r\n\r\n")
-            self.sslsocket.send(request.encode('ascii'))
-            response = b""
-            while True:
-                chunk = self.sslsocket.recv(4096)
-                if not chunk:
-                    break
-                response += chunk
-            return response.decode('utf-8', errors='ignore')
-        except Exception as e:
-            print(f"Error posting login: {e}")
-            return ""
-
+        request = (f"POST /accounts/login/ HTTP/1.1\r\nHost: {self.server}:{self.port}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 200\r\nCookie: {self.pass_cookies_responce()}\r\nConnection: close\r\n\r\nusername={self.username}&password={self.password}&csrfmiddlewaretoken={self.csrf_token}&next=%2Ffakebook%2F\r\n\r\n")
+        if self.debug:
+            print(f"Request to {self.server}:{self.port}:\n{request}")
+        self.sslsocket.send(request.encode('ascii'))
+        response = b""
+        while True:
+            chunk = self.sslsocket.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+        if self.debug:
+            print(f"Response from {self.server}:{self.port}:\n{response.decode('utf-8', errors='ignore')}")
+        return response.decode('utf-8', errors='ignore')
+    
     def update_cookies(self, response):
         """Extracts the cookies from the server's response."""
-        try:
-            pattern = re.compile(r'set-cookie:\s*([^=]+)=([^;]+)', re.IGNORECASE)
-            matches = pattern.findall(response)
-            for match in matches:
-                self.cookies[match[0]] = match[1]
-        except Exception as e:
-            print(f"Error updating cookies: {e}")
-
+        pattern = re.compile(r'set-cookie:\s*([^=]+)=([^;]+)', re.IGNORECASE)
+        matches = pattern.findall(response)
+        for match in matches:
+            self.cookies[match[0]] = match[1]
+            
     def extract_flags(self, response):
         """
         Extracts secret flags from the given HTML response.
@@ -122,168 +109,142 @@ class Crawler:
         Returns:
             list: A list of secret flags found in the response.
         """
-        try:
-            pattern = re.compile(r"<h3 class='secret_flag' style=\"color:red\">FLAG: ([a-zA-Z0-9]{64})</h3>")
-            flags = pattern.findall(response)
-            with open("secret_flags", "a") as f:
-                for flag in flags:
-                    print(flag)
-                    f.write(flag + "\n")
-                    self.num_secret_flags += 1
-            return flags
-        except Exception as e:
-            print(f"Error extracting flags: {e}")
-            return []
-
+        pattern = re.compile(r"<h3 class='secret_flag' style=\"color:red\">FLAG: ([a-zA-Z0-9]{64})</h3>")
+        flags = pattern.findall(response)
+        with open("secret_flags", "a") as f:
+            for flag in flags:
+                print(flag)
+                f.write(flag + "\n")
+                self.num_secret_flags += 1
+        return flags
+            
     def extract_csrf_token(self, response):
         """Extracts the CSRF token from the HTML response."""
-        try:
-            pattern = re.compile(r'name="csrfmiddlewaretoken" value="([^"]+)"')
-            match = pattern.search(response)
-            if match:
-                self.csrf_token = match.group(1)
-            return None
-        except Exception as e:
-            print(f"Error extracting CSRF token: {e}")
-            return None
-
+        pattern = re.compile(r'name="csrfmiddlewaretoken" value="([^"]+)"')
+        match = pattern.search(response)
+        if match:
+            self.csrf_token = match.group(1)
+        return None
+    
     def pass_cookies_responce(self):
-        """Returns the cookies in the response format. returns a string"""
-        try:
-            cookie_responce = ""
-            for key, value in self.cookies.items():
-                cookie_responce += f"{key}={value};"
-            if cookie_responce:
-                return cookie_responce[:-1]
-        except Exception as e:
-            print(f"Error passing cookies response: {e}")
-            return ""
-
+        """Returns the cookies in the response foramat. returns a string"""
+        cookie_responce = ""
+        for key, value in self.cookies.items():
+            cookie_responce += f"{key}={value};"
+        if cookie_responce:
+            return cookie_responce[:-1]
+        
     def crawling_logic(self, response):
         """
-        Takes the response of the webpage with the friends list and returns all of the links
+        Takes the responce of the webpage with the friends list and returns all of the links
         To the next friends page.
 
         Args:
             response (str): html response of the friends page
         """
-        try:
-            pattern = re.compile(r'<a href="([^"]+)">.*?' r'.*?</a>', re.IGNORECASE)
-            matches = pattern.findall(response)
-            return matches
-        except Exception as e:
-            print(f"Error in crawling logic: {e}")
-            return []
-
+        pattern = re.compile(r'<a href="([^"]+)">.*?' r'.*?</a>', re.IGNORECASE)
+        matches = pattern.findall(response)
+        return matches
+        pass
+    
     def extract_friends(self, response):
         """Extracts names and links from the given HTML response and appends them to self.friends."""
-        try:
-            # Regex pattern to match <a href="link">Name</a>
-            pattern = re.compile(r'<a href="(/fakebook/\d+)/">(.*?)</a>')
+        # Regex pattern to match <a href="link">Name</a>
+        pattern = re.compile(r'<a href="(/fakebook/\d+)/">(.*?)</a>')
+        
+        # Find all matches of the pattern in the response
+        matches = pattern.findall(response)
+        
+        # Append each name and link to the self.friends dictionary
+        for link, name in matches:
+            self.queue.append(link)
+    
+    def get_friends_friends(self, responce):
+        """Takes the responce of a friends page and returns the friends of the friends"""
+        pattern = re.compile(r'<a href="(/fakebook/\d+/friends/\d+/)">(.*?)', re.IGNORECASE)
+        matches = pattern.findall(responce)
+        
+        for link, name in matches:
+            self.queue.append(link)
+        
             
-            # Find all matches of the pattern in the response
-            matches = pattern.findall(response)
-            
-            # Append each name and link to the self.friends dictionary
-            for link, name in matches:
-                self.queue.append(link)
-        except Exception as e:
-            print(f"Error extracting friends: {e}")
-
-    def get_friends_friends(self, response):
-        """Takes the response of a friends page and returns the friends of the friends"""
-        try:
-            pattern = re.compile(r'<a href="(/fakebook/\d+/friends/\d+/)">(.*?)', re.IGNORECASE)
-            matches = pattern.findall(response)
-            
-            for link, name in matches:
-                self.queue.append(link)
-        except Exception as e:
-            print(f"Error getting friends of friends: {e}")
-
     def bfs_crawl(self, initial_response):
         """
         Performs a breadth-first search (BFS) on the friends' network to find secret flags.
         Stops when 5 flags are discovered.
         """
-        try:
-            # Extract initial friends from the response
-            self.extract_friends(initial_response)
+        # Extract initial friends from the response
+        self.extract_friends(initial_response)
 
-            while self.queue and self.num_secret_flags < 5:  # Stop after discovering 5 flags
-                # Get the next friend's link from the queue
-                current_link = self.queue.pop(0)
+        while self.queue and self.num_secret_flags < 5:  # Stop after discovering 5 flags
+            # Get the next friend's link from the queue
+            current_link = self.queue.pop(0)
 
-                # Skip if already visited
-                if current_link in self.visited:
-                    continue
-                
-                self.visited.add(current_link)
+            # Skip if already visited
+            if current_link in self.visited:
+                continue
 
-                # Fetch and parse the friend's page
+            if self.debug:
+                print(f"Visiting: {current_link}")
+            self.visited.add(current_link)
+
+            # Fetch and parse the friend's page
+            self.connect()
+            response = self.rec_webpage(current_link)
+            self.get_friends_friends(response)
+            self.close()
+
+            # Follow any redirects
+            next_link = self.goto_next_location(response)
+            if next_link:
                 self.connect()
-                response = self.rec_webpage(current_link)
+                response = self.rec_webpage(next_link)
                 self.get_friends_friends(response)
                 self.close()
 
-                # Follow any redirects
-                next_link = self.goto_next_location(response)
-                if next_link:
-                    self.connect()
-                    response = self.rec_webpage(next_link)
-                    self.get_friends_friends(response)
-                    self.close()
+            # Extract flags from the current page
+            self.extract_flags(response)
 
-                # Extract flags from the current page
-                self.extract_flags(response)
+            # Add new links to the queue
+            self.get_friends_friends(response)
+            self.extract_friends(response)
 
-                # Add new links to the queue
-                self.get_friends_friends(response)
-                self.extract_friends(response)
-        except Exception as e:
-            print(f"Error in BFS crawl: {e}")
+        print(f"Crawl completed. Total flags found: {self.num_secret_flags}")
 
+        
     def start_sequence(self):
         """Attempts to log into fakebook returns the first list of friends"""
-        try:
-            self.connect()
-            response = self.rec_webpage()
-            self.extract_csrf_token(response)
-            self.close()
-            self.connect()
-            next_link = self.extract_next_link(response, "Fakebook")
-            response = self.rec_webpage(next_link)
-            next_link = self.goto_next_location(response)
-            self.extract_csrf_token(response)
-            self.close()
-            self.connect()
-            response = self.rec_webpage(next_link)
-            self.update_cookies(response)
-            self.extract_csrf_token(response)
-            self.close()
-            self.connect()
-            response = self.post_login()
-            self.update_cookies(response)
-            self.close()
-            self.connect()
-            next_link = self.goto_next_location(response)
-            response = self.rec_webpage(next_link)
-            self.update_cookies(response)
-            self.close()
-            return response
-        except Exception as e:
-            print(f"Error in start sequence: {e}")
-            return ""
+        self.connect()
+        response = self.rec_webpage()
+        self.extract_csrf_token(response)
+        self.close()
+        self.connect()
+        next_link = self.extract_next_link(response, "Fakebook")
+        response = self.rec_webpage(next_link)
+        next_link = self.goto_next_location(response)
+        self.extract_csrf_token(response)
+        self.close()
+        self.connect()
+        response = self.rec_webpage(next_link)
+        self.update_cookies(response)
+        self.extract_csrf_token(response)
+        self.close()
+        self.connect()
+        response = self.post_login()
+        self.update_cookies(response)
+        self.close()
+        self.connect()
+        response = self.rec_webpage('/fakebook/')
+        self.update_cookies(response)
+        self.close()
+        return response
 
     def run(self):
         """Main method to connect, fetch a webpage, and close the connection."""
-        try:
-            friends_page_responce = self.start_sequence()
-            
-            # Crawling logic
-            self.bfs_crawl(friends_page_responce)
-        except Exception as e:
-            print(f"Error in run method: {e}")
+        friends_page_responce = self.start_sequence()
+        
+        # Crawling logic
+        self.bfs_crawl(friends_page_responce)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Crawl Fakebook")
@@ -294,5 +255,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     crawler = Crawler(args)
-    print(args)
     crawler.run()
