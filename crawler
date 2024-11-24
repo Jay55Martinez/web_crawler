@@ -6,7 +6,7 @@ import ssl
 import certifi
 import re
 
-DEFAULT_SERVER = "proj5.3700.network"
+DEFAULT_SERVER = "fakebook.khoury.northeastern.edu"
 DEFAULT_PORT = 443
 
 class Crawler:
