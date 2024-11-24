@@ -209,7 +209,8 @@ class Crawler:
             self.get_friends_friends(response)
             self.extract_friends(response)
 
-        print(f"Crawl completed. Total flags found: {self.num_secret_flags}")
+        if self.debug:
+            print(f"Crawl completed. Total flags found: {self.num_secret_flags}")
 
         
     def start_sequence(self):
