@@ -29,13 +29,12 @@ class Crawler:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sslsocket = self.context.wrap_socket(self.socket, server_hostname=self.server)
         self.sslsocket.connect((self.server, self.port))
-        # print(f"Connected to {self.server}:{self.port}")
-
+        
     def close(self):
         """Closes the connection."""
         if self.sslsocket:
             self.sslsocket.close()
-            # print("Connection closed.")
+        
 
     def rec_webpage(self, path="/"):
         """Sends a GET request and retrieves the server's response."""
@@ -43,7 +42,6 @@ class Crawler:
         if self.cookies:
             request += f"Cookie: {self.pass_cookies_responce()}\r\n"
         request += "\r\n"
-        #print(f"Request to {self.server}:{self.port}:\n{request}")
         self.sslsocket.send(request.encode('ascii'))
     
         response = b""
@@ -53,7 +51,6 @@ class Crawler:
                 break
             response += chunk
 
-        #print(f"Response from {self.server}:{self.port}:\n{response.decode('utf-8', errors='ignore')}")
         return response.decode('utf-8', errors='ignore')
 
     def extract_next_link(self, response, target_text):
@@ -76,7 +73,6 @@ class Crawler:
     def post_login(self):
         """Posts the login form to the server."""
         request = (f"POST /accounts/login/ HTTP/1.1\r\nHost: {self.server}:{self.port}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 200\r\nCookie: {self.pass_cookies_responce()}\r\nConnection: close\r\n\r\nusername={self.username}&password={self.password}&csrfmiddlewaretoken={self.csrf_token}&next=%2Ffakebook%2F\r\n\r\n")
-        #print(f"Request to {self.server}:{self.port}:\n{request}")
         self.sslsocket.send(request.encode('ascii'))
         response = b""
         while True:
@@ -84,7 +80,6 @@ class Crawler:
             if not chunk:
                 break
             response += chunk
-        #print(f"Response from {self.server}:{self.port}:\n{response.decode('utf-8', errors='ignore')}")
         return response.decode('utf-8', errors='ignore')
     
     def update_cookies(self, response):
@@ -178,8 +173,7 @@ class Crawler:
             # Skip if already visited
             if current_link in self.visited:
                 continue
-
-            print(f"Visiting: {current_link}")
+            
             self.visited.add(current_link)
 
             # Fetch and parse the friend's page
@@ -202,23 +196,18 @@ class Crawler:
             # Add new links to the queue
             self.get_friends_friends(response)
             self.extract_friends(response)
-
-        print(f"Crawl completed. Total flags found: {self.num_secret_flags}")
-
         
     def start_sequence(self):
         """Attempts to log into fakebook returns the first list of friends"""
         self.connect()
         response = self.rec_webpage()
         self.extract_csrf_token(response)
-        print(self.csrf_token)
         self.close()
         self.connect()
         next_link = self.extract_next_link(response, "Fakebook")
         response = self.rec_webpage(next_link)
         next_link = self.goto_next_location(response)
         self.extract_csrf_token(response)
-        print(self.csrf_token)
         self.close()
         self.connect()
         response = self.rec_webpage(next_link)
